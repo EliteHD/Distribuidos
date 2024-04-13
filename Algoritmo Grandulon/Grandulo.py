@@ -7,7 +7,7 @@ import time
 def enviar_mensaje_a_todos(mensaje, puerto):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         for i in range(1, 255):
-            direccion = f"192.168.1.{i}"  # Cambia esto por la red que estés utilizando
+            direccion = f" 175.1.46.{i}"  # Cambia esto por la red que estés utilizando
             try:
                 sock.sendto(mensaje.encode(), (direccion, puerto))
             except OSError:
