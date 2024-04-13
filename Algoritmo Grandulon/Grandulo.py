@@ -7,7 +7,7 @@ import time
 def enviar_mensaje_a_todos(mensaje, puerto):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         for i in range(1, 255):
-            direccion = f" 175.1.{i}.{i}"  # Cambia esto por la red que estés utilizando
+            direccion = f"175.1.{i}.{i}"  # Cambia esto por la red que estés utilizando
             try:
                 sock.sendto(mensaje.encode(), (direccion, puerto))
             except OSError:
@@ -54,11 +54,10 @@ def main():
 
         # Simular desconexión del gran jefe
         print(f"El nodo con identificador {gran_jefe[0]} se ha desconectado.")
-        gran_jefe[0] = obtener_identificador()
-        print(f"El nuevo gran jefe será el nodo con identificador {gran_jefe[0]}.")
+        print(f"El nuevo gran jefe será el nodo con identificador {identificador}.")
 
         # Reiniciar proceso de elección de gran jefe
-        mensaje = f"{gran_jefe[0]}:¡Soy el gran jefe!"
+        mensaje = f"{identificador}:¡Soy el gran jefe!"
         enviar_mensaje_a_todos(mensaje, puerto)
 
 if __name__ == "__main__":
