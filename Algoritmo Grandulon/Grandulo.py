@@ -1,7 +1,5 @@
 import socket
 import threading
-import random
-import time
 
 # Función para enviar mensajes a todos los nodos
 def enviar_mensaje_a_todos(mensaje, puerto):
@@ -21,24 +19,22 @@ def escuchar_mensajes(puerto, identificador, gran_jefe):
             mensaje, direccion = sock.recvfrom(1024)
             mensaje = mensaje.decode()
             recibido_identificador = int(mensaje.split(":")[0])
-            if recibido_identificador > identificador:
+            if recibido_identificador > gran_jefe[0]:
                 gran_jefe[0] = recibido_identificador
-                identificador = recibido_identificador
-                print(f"Nodo con identificador {identificador} es el nuevo gran jefe.")
-            else:
-                print(f"Nodo con identificador {recibido_identificador} intentó ser el gran jefe, pero no superó a {identificador}.")
+                print(f"Nodo con identificador {gran_jefe[0]} es el nuevo gran jefe.")
 
-# Función para obtener un identificador aleatorio
+# Función para obtener el identificador basado en la dirección IP
 def obtener_identificador():
-    return random.randint(1, 1000)
+    direccion_ip = socket.gethostbyname(socket.gethostname())
+    partes_ip = direccion_ip.split('.')
+    identificador = int(partes_ip[-1])  # Tomar el último octeto de la dirección IP
+    return identificador
 
 # Función principal
 def main():
     identificador = obtener_identificador()
     puerto = 5000
     gran_jefe = [identificador]
-
-    print(f"El identificador de este nodo es: {identificador}")
 
     # Iniciar hilo para escuchar mensajes
     thread_escucha = threading.Thread(target=escuchar_mensajes, args=(puerto, identificador, gran_jefe))
@@ -48,17 +44,8 @@ def main():
     mensaje = f"{identificador}:¡Soy el gran jefe!"
     enviar_mensaje_a_todos(mensaje, puerto)
 
-    # Ciclo para simular desconexiones y nuevas elecciones de gran jefe
-    while True:
-        time.sleep(10)  # Espera 10 segundos antes de simular una desconexión y una nueva elección del gran jefe
-
-        # Simular desconexión del gran jefe
-        print(f"El nodo con identificador {gran_jefe[0]} se ha desconectado.")
-        print(f"El nuevo gran jefe será el nodo con identificador {identificador}.")
-
-        # Reiniciar proceso de elección de gran jefe
-        mensaje = f"{identificador}:¡Soy el gran jefe!"
-        enviar_mensaje_a_todos(mensaje, puerto)
+    # Esperar a que se elija al gran jefe
+    thread_escucha.join()
 
 if __name__ == "__main__":
     main()
