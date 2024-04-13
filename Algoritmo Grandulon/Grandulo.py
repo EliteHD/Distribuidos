@@ -1,11 +1,13 @@
 import socket
 import threading
+import random
+import time
 
 # Función para enviar mensajes a todos los nodos
 def enviar_mensaje_a_todos(mensaje, puerto):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         for i in range(1, 255):
-            direccion = f"175.1.{i}.{i}" 
+            direccion = f"192.168.1.{i}"  # Cambia esto por la red que estés utilizando
             try:
                 sock.sendto(mensaje.encode(), (direccion, puerto))
             except OSError:
@@ -26,12 +28,9 @@ def escuchar_mensajes(puerto, identificador, gran_jefe):
             else:
                 print(f"Nodo con identificador {recibido_identificador} intentó ser el gran jefe, pero no superó a {identificador}.")
 
-# Función para obtener el identificador basado en la dirección IP
+# Función para obtener un identificador aleatorio
 def obtener_identificador():
-    direccion_ip = socket.gethostbyname(socket.gethostname())
-    partes_ip = direccion_ip.split('.')
-    identificador = int(partes_ip[-1])  # Tomar el último octeto de la dirección IP
-    return identificador
+    return random.randint(1, 1000)
 
 # Función principal
 def main():
@@ -49,8 +48,18 @@ def main():
     mensaje = f"{identificador}:¡Soy el gran jefe!"
     enviar_mensaje_a_todos(mensaje, puerto)
 
-    # Esperar a que se elija al gran jefe
-    thread_escucha.join()
+    # Ciclo para simular desconexiones y nuevas elecciones de gran jefe
+    while True:
+        time.sleep(10)  # Espera 10 segundos antes de simular una desconexión y una nueva elección del gran jefe
+
+        # Simular desconexión del gran jefe
+        print(f"El nodo con identificador {gran_jefe[0]} se ha desconectado.")
+        gran_jefe[0] = obtener_identificador()
+        print(f"El nuevo gran jefe será el nodo con identificador {gran_jefe[0]}.")
+
+        # Reiniciar proceso de elección de gran jefe
+        mensaje = f"{gran_jefe[0]}:¡Soy el gran jefe!"
+        enviar_mensaje_a_todos(mensaje, puerto)
 
 if __name__ == "__main__":
     main()
