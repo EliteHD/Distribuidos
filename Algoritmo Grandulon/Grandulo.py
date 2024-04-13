@@ -5,7 +5,7 @@ import threading
 def enviar_mensaje_a_todos(mensaje, puerto):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         for i in range(1, 255):
-            direccion = f"175.1.46.{i}" 
+            direccion = f"175.1.{i}.{i}" 
             try:
                 sock.sendto(mensaje.encode(), (direccion, puerto))
             except OSError:
