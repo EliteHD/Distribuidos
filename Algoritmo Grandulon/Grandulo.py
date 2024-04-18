@@ -1,105 +1,80 @@
-
 import socket
 import threading
 import time
 import sys
-import json
 
 class Node:
-    def __init__(self, identifier, host, port, nodes_info):
-        self.identifier = identifier
-        self.host = host
+    def __init__(self, node_id, ip, port, peers):
+        self.node_id = node_id
+        self.ip = ip
         self.port = port
-        self.nodes_info = nodes_info  # Dictionary of other nodes' IDs, hosts, and ports
-        self.leader = None
-        self.running = True
-        self.lock = threading.Lock()
+        self.peers = peers  # Diccionario de peers donde las claves son los IDs y los valores son tuplas de (IP, puerto)
+        self.coordinator = None
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind((ip, port))
+        self.socket.listen(10)
+        print(f"Node {self.node_id} listening on {ip}:{port}")
 
-    def start_node(self):
-        threading.Thread(target=self.run_server).start()
-
-    def run_server(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.host, self.port))
-            server_socket.listen()
-            print(f'Node {self.identifier} listening on {self.host}:{self.port}')
-            while self.running:
-                conn, addr = server_socket.accept()
-                threading.Thread(target=self.handle_connection, args=(conn,)).start()
-
-    def handle_connection(self, conn):
-        with conn:
-            while True:
-                data = conn.recv(1024)
-                if not data:
-                    break
-                message = data.decode()
-                self.process_message(message, conn)
-
-    def process_message(self, message, conn):
-        if message.startswith('ELECTION'):
-            self.respond_to_election(message, conn)
-        elif message.startswith('COORDINATOR'):
-            self.acknowledge_leader(message)
-
-    def respond_to_election(self, message, conn):
-        sender_id = int(message.split()[-1])
-        if self.identifier > sender_id:
-            conn.sendall(f'OK {self.identifier}'.encode())
-
-    def acknowledge_leader(self, message):
-        leader_id = int(message.split()[-1])
-        with self.lock:
-            self.leader = leader_id
-            print(f'Node {self.identifier}: Acknowledged new leader {self.leader}')
-
-    def initiate_election(self):
-        higher_nodes = [(id_, info) for id_, info in self.nodes_info.items() if id_ > self.identifier]
-        responses = []
-        for node_id, (host, port) in higher_nodes:
+    def handle_connection(self, conn, addr):
+        while True:
             try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                    client_socket.connect((host, port))
-                    client_socket.sendall(f'ELECTION {self.identifier}'.encode())
-                    response = client_socket.recv(1024).decode()
-                    if response.startswith('OK'):
-                        responses.append(node_id)
-            except (ConnectionRefusedError, socket.timeout):
-                continue
+                message = conn.recv(1024).decode()
+                if message:
+                    print(f"Node {self.node_id} received message: {message} from {addr}")
+                    cmd, src_id = message.split(',')
+                    if cmd == 'ELECTION':
+                        self.respond_to_election(int(src_id))
+                    elif cmd == 'COORDINATOR':
+                        self.coordinator = int(src_id)
+                        print(f"Node {self.node_id}: New coordinator is {self.coordinator}")
+            except:
+                break
 
-        if not responses:  # No higher node responded
-            self.declare_as_leader()
-        else:
-            print(f'Node {self.identifier} received OK from {responses}')
+    def respond_to_election(self, src_id):
+        if self.node_id > src_id:
+            self.send_message(src_id, 'RESPONSE')
+            self.start_election()
 
-    def declare_as_leader(self):
-        self.leader = self.identifier
-        print(f'Node {self.identifier} declares itself as the leader')
-        for node_id, (host, port) in self.nodes_info.items():
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                    client_socket.connect((host, port))
-                    client_socket.sendall(f'COORDINATOR {self.identifier}'.encode())
-            except ConnectionRefusedError:
-                continue
+    def start_election(self):
+        responses = False
+        for pid, (p_ip, p_port) in self.peers.items():
+            if pid > self.node_id:
+                if self.send_message(pid, 'ELECTION'):
+                    responses = True
+        if not responses:
+            self.announce_coordinator()
 
-    def stop_node(self):
-        self.running = False
+    def announce_coordinator(self):
+        self.coordinator = self.node_id
+        for pid, (p_ip, p_port) in self.peers.items():
+            self.send_message(pid, 'COORDINATOR')
+
+    def send_message(self, peer_id, message):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((self.peers[peer_id][0], self.peers[peer_id][1]))
+                sock.send(f"{message},{self.node_id}".encode())
+                return True
+        except:
+            return False
+
+    def listen(self):
+        while True:
+            conn, addr = self.socket.accept()
+            threading.Thread(target=self.handle_connection, args=(conn, addr)).start()
+
+    def close(self):
+        self.socket.close()
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print("Usage: python3 node.py <config_file> <node_id>")
-        sys.exit(1)
-    
-    config_file, node_id = sys.argv[1], int(sys.argv[2])
-    with open(config_file, 'r') as f:
-        config = json.load(f)
-    
-    nodes_info = {int(id_): tuple(info) for id_, info in config['nodes'].items()}
-    host, port = nodes_info[node_id]
+    node_id = int(sys.argv[1])
+    ip = sys.argv[2]
+    port = int(sys.argv[3])
+    peers = {1: ('175.1.54.224', 5000), 2: ('175.1.54.224', 5001), 3: ('175.1.54.224', 5002)}
 
-    node = Node(node_id, host, port, nodes_info)
-    node.start_node()
-    time.sleep(2)  # Allow nodes to start up
-    if node_id == min(nodes_info.keys()):  # Let the smallest ID node start an election
-        node.initiate_election()
+    node = Node(node_id, ip, port, peers)
+    try:
+        threading.Thread(target=node.listen).start()
+    except Exception as e:
+        print(f"Error: {e}")
+        node.close()
